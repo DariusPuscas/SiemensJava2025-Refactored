@@ -14,22 +14,43 @@ public class ItemService {
     @Autowired
     private ItemRepository itemRepository;
     private static ExecutorService executor = Executors.newFixedThreadPool(10);
-    private List<Item> processedItems = new ArrayList<>();
-    private int processedCount = 0;
 
-
+    /**
+     * @return all items
+     * @returntype List<Item>
+     */
     public List<Item> findAll() {
         return itemRepository.findAll();
     }
 
+    /**
+     *
+     * @param id
+     * @paramtype Long
+     * @return item with that id
+     * @returntype Optional<Item>
+     */
     public Optional<Item> findById(Long id) {
         return itemRepository.findById(id);
     }
 
+    /**
+     *
+     * @param item
+     * @paramtype Item
+     * @return saved item
+     * @returntype Item
+     */
     public Item save(Item item) {
         return itemRepository.save(item);
     }
 
+    /**
+     *
+     * @param id
+     * @paramtype Long
+     * deletes item with that id
+     */
     public void deleteById(Long id) {
         itemRepository.deleteById(id);
     }
@@ -53,35 +74,55 @@ public class ItemService {
      * Examine how errors are handled and propagated
      * Consider the interaction between Spring's @Async and CompletableFuture
      */
+
+    /**
+     * Process async all items:
+     * - mark them as PROCESSED
+     * - save in bd
+     * - wait until all tasks are finished
+     *
+     * @return all processed items
+     * @returntype CompletableFuture<List<Item>>
+     */
     @Async
-    public List<Item> processItemsAsync() {
+    public CompletableFuture<List<Item>> processItemsAsync() {
+        // Get all item IDs from the database
+        List<Long> ids = itemRepository.findAllIds();
 
-        List<Long> itemIds = itemRepository.findAllIds();
+        // Prepare async processing tasks for each ID
+        List<CompletableFuture<Item>> taskList = new ArrayList<>();
 
-        for (Long id : itemIds) {
-            CompletableFuture.runAsync(() -> {
-                try {
-                    Thread.sleep(100);
+        for (Long id : ids) {
+            CompletableFuture<Item> task = CompletableFuture.supplyAsync(() -> {
+                Item item = itemRepository.findById(id).orElse(null);
+                if (item == null) return null;
 
-                    Item item = itemRepository.findById(id).orElse(null);
-                    if (item == null) {
-                        return;
-                    }
-
-                    processedCount++;
-
-                    item.setStatus("PROCESSED");
-                    itemRepository.save(item);
-                    processedItems.add(item);
-
-                } catch (InterruptedException e) {
-                    System.out.println("Error: " + e.getMessage());
-                }
+                item.setStatus("PROCESSED");
+                return itemRepository.save(item);
             }, executor);
+
+            taskList.add(task);
         }
 
-        return processedItems;
+        // Wait for all tasks to complete and collect the results
+        return CompletableFuture
+                .allOf(taskList.toArray(new CompletableFuture[0]))
+                .thenApply(v -> {
+                    List<Item> processed = new ArrayList<>();
+                    for (CompletableFuture<Item> future : taskList) {
+                        try {
+                            Item result = future.get();
+                            if (result != null) {
+                                processed.add(result);
+                            }
+                        } catch (Exception e) {
+                            System.err.println("Error processing item: " + e.getMessage());
+                        }
+                    }
+                    return processed;
+                });
     }
+
 
 }
 
