@@ -37,3 +37,17 @@ This repository contains a Spring Boot application that implements a simple CRUD
 Copy the project and make the solution public on your personal GitHub.
 Provide us the GitHub URL via email.
 (Don't forget to make the repository PUBLIC 😁)
+
+## What I Refactored
+
+1. Removed duplicated code and clarified business logic in ItemService
+
+2. Added proper error handling in the controller
+
+3. Corrected HTTP status codes (e.g. fixed misuse of 409 and 201)
+
+4. Implemented validation for inputs (e.g. email format, required name)
+
+5. Added complete unit and integration testing for all main components
+
+6. Documented methods with clear and concise comments for better readability
